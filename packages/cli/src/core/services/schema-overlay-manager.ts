@@ -32,7 +32,7 @@ export interface OverlayNodeVersion {
 }
 
 interface OverlayFile {
-    schemaVersion: 1;
+    schemaVersion: 2;
     ttlMs: number;
     nodes: Record<string, { type: string; name: string; version: number[]; versions: Record<string, OverlayNodeVersion> }>;
 }
@@ -87,7 +87,7 @@ export class SchemaOverlayManager {
     private readCache(): OverlayFile {
         try {
             const raw = JSON.parse(fs.readFileSync(this.overlayPath, 'utf8')) as OverlayFile;
-            if (raw.schemaVersion === 1 && raw.nodes && typeof raw.nodes === 'object') {
+            if (raw.schemaVersion === 2 && raw.nodes && typeof raw.nodes === 'object') {
                 // Drop legacy version records keyed by bare version (no
                 // discriminator axes); they are re-fetched on demand.
                 for (const entry of Object.values(raw.nodes)) {
@@ -100,7 +100,7 @@ export class SchemaOverlayManager {
         } catch {
             // missing or corrupt cache — start fresh
         }
-        return { schemaVersion: 1, ttlMs: this.ttlMs, nodes: {} };
+        return { schemaVersion: 2, ttlMs: this.ttlMs, nodes: {} };
     }
 
     private writeCache(cache: OverlayFile): void {
