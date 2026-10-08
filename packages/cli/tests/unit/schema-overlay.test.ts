@@ -353,6 +353,86 @@ describe('SchemaOverlayManager', () => {
         }
     });
 
+    it('does not let a specific operation section cover a templated operation', async () => {
+        const definitions = [
+            '## n8n-nodes-base.gmailTool (v22)',
+            '',
+            '```typescript',
+            '* Discriminator: resource=message, operation=get_all',
+            'export interface GmailV22Params {',
+            "    marker?: 'getAll';",
+            '}',
+            '```',
+        ].join('\n');
+        const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-'));
+        const manager = new SchemaOverlayManager({
+            endpoint: 'https://unused.local',
+            token: 'x',
+            cacheDir,
+            client: {
+                listTools: async () => [],
+                callTool: async () => ({ structuredContent: { definitions } }),
+            } as any,
+        });
+        const descriptors = SchemaOverlayManager.collectNodeTypes({
+            nodes: [
+                { type: 'n8n-nodes-base.gmailTool', typeVersion: 2.2, parameters: { resource: 'message', operation: 'getAll' } },
+                { type: 'n8n-nodes-base.gmailTool', typeVersion: 2.2, parameters: { resource: 'message', operation: '={{ $json.operation }}' } },
+            ],
+        });
+
+        try {
+            const result = await manager.ensureForTypes(descriptors);
+            expect(result.failed).toEqual(['n8n-nodes-base.gmailTool@2.2/message']);
+            const cache = JSON.parse(fs.readFileSync(path.join(cacheDir, '.schema-overlay.json'), 'utf8'));
+            expect(cache.nodes['n8n-nodes-base.gmailTool'].versions['2.2|message|get_all']).toBeDefined();
+            expect(cache.nodes['n8n-nodes-base.gmailTool'].versions['2.2|message|']).toBeUndefined();
+            expect(JSON.parse(fs.readFileSync(manager.providerFilePath, 'utf8')).nodes['n8n-nodes-base.gmailTool']).toBeUndefined();
+        } finally {
+            fs.rmSync(cacheDir, { recursive: true, force: true });
+        }
+    });
+
+    it('does not let a specific resource section cover a templated resource', async () => {
+        const definitions = [
+            '## n8n-nodes-base.gmailTool (v22)',
+            '',
+            '```typescript',
+            '* Discriminator: resource=message, operation=get_all',
+            'export interface GmailV22Params {',
+            "    marker?: 'getAll';",
+            '}',
+            '```',
+        ].join('\n');
+        const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'overlay-'));
+        const manager = new SchemaOverlayManager({
+            endpoint: 'https://unused.local',
+            token: 'x',
+            cacheDir,
+            client: {
+                listTools: async () => [],
+                callTool: async () => ({ structuredContent: { definitions } }),
+            } as any,
+        });
+        const descriptors = SchemaOverlayManager.collectNodeTypes({
+            nodes: [
+                { type: 'n8n-nodes-base.gmailTool', typeVersion: 2.2, parameters: { resource: 'message', operation: 'getAll' } },
+                { type: 'n8n-nodes-base.gmailTool', typeVersion: 2.2, parameters: { resource: '={{ $json.resource }}', operation: 'getAll' } },
+            ],
+        });
+
+        try {
+            const result = await manager.ensureForTypes(descriptors);
+            expect(result.failed).toEqual(['n8n-nodes-base.gmailTool@2.2:get_all']);
+            const cache = JSON.parse(fs.readFileSync(path.join(cacheDir, '.schema-overlay.json'), 'utf8'));
+            expect(cache.nodes['n8n-nodes-base.gmailTool'].versions['2.2|message|get_all']).toBeDefined();
+            expect(cache.nodes['n8n-nodes-base.gmailTool'].versions['2.2||get_all']).toBeUndefined();
+            expect(JSON.parse(fs.readFileSync(manager.providerFilePath, 'utf8')).nodes['n8n-nodes-base.gmailTool']).toBeUndefined();
+        } finally {
+            fs.rmSync(cacheDir, { recursive: true, force: true });
+        }
+    });
+
     it('keeps supported definitions when a response also contains an unsupported union', async () => {
         const definitions = [
             '## n8n-nodes-base.code (v20)',

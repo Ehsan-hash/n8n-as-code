@@ -240,7 +240,8 @@ export class SchemaOverlayManager {
                 const want = descriptor[axis];
                 const got = s[axis];
                 if (want === undefined) {
-                    score += got === undefined ? 2 : 1;
+                    if (got !== undefined) return -1;
+                    score += 2;
                 } else if (got === undefined) {
                     score += 1;
                 } else if (got === want) {
