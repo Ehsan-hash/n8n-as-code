@@ -428,19 +428,42 @@ ${interfaceBody}
     /** Return true only for a property with no parameter gate at this version. */
     private static isUngatedOption(prop: any, version: number): boolean {
         const displayOptions = prop?.displayOptions;
-        if (prop?.disabledOptions) return false;
-        if (!displayOptions || typeof displayOptions !== 'object') return true;
+        if (displayOptions !== undefined) {
+            if (!displayOptions || typeof displayOptions !== 'object' || Array.isArray(displayOptions)) return false;
+            for (const [kind, conditions] of [['show', displayOptions.show], ['hide', displayOptions.hide]] as const) {
+                if (conditions === undefined) continue;
+                if (!conditions || typeof conditions !== 'object' || Array.isArray(conditions)) return false;
+                const keys = Object.keys(conditions);
+                if (keys.some((key) => key !== '@version')) return false;
+                if (!Object.prototype.hasOwnProperty.call(conditions, '@version')) continue;
+                const applies = this.matchesVersion(conditions['@version'], version);
+                if ((kind === 'show' && !applies) || (kind === 'hide' && applies)) return false;
+            }
+        }
 
-        for (const [kind, conditions] of [['show', displayOptions.show], ['hide', displayOptions.hide]] as const) {
+        if (prop?.disabledOptions === undefined) return true;
+        const disabledOptions = prop.disabledOptions;
+        if (!disabledOptions || typeof disabledOptions !== 'object' || Array.isArray(disabledOptions)) return false;
+        if (Object.keys(disabledOptions).some((key) => key !== 'show' && key !== 'hide')) return false;
+
+        // Version-only disabled rules can be resolved here. Parameter-dependent or
+        // malformed rules stay excluded because compact cannot evaluate their values.
+        let hasHideRule = false;
+        for (const [kind, conditions] of [['show', disabledOptions.show], ['hide', disabledOptions.hide]] as const) {
             if (conditions === undefined) continue;
             if (!conditions || typeof conditions !== 'object' || Array.isArray(conditions)) return false;
             const keys = Object.keys(conditions);
+            if (keys.length === 0) continue;
             if (keys.some((key) => key !== '@version')) return false;
-            if (!Object.prototype.hasOwnProperty.call(conditions, '@version')) continue;
             const applies = this.matchesVersion(conditions['@version'], version);
-            if ((kind === 'show' && !applies) || (kind === 'hide' && applies)) return false;
+            if (kind === 'show') {
+                if (!applies) return true;
+            } else {
+                hasHideRule = true;
+                if (!applies) return false;
+            }
         }
-        return true;
+        return hasHideRule;
     }
 
     /**

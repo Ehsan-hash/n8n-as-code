@@ -219,6 +219,37 @@ describe('compact projection (universal, no per-node heuristics)', () => {
         expect(doc).toContain('  flags: [false],');
         expect(doc).toContain("  label: \"O'Reilly\\n\",");
     });
+
+    test.each([
+        ['no disabledOptions stays enabled', undefined, true],
+        ['disabled on an old version stays enabled', { show: { '@version': [1] } }, true],
+        ['disabled on the current version is excluded', { show: { '@version': [2] } }, false],
+        ['disabled by a current-version comparator is excluded', { show: { '@version': [{ _cnd: { gte: 2 } }] } }, false],
+        ['current-version disabled hide stays enabled', { hide: { '@version': [2] } }, true],
+        ['other-version disabled hide is excluded', { hide: { '@version': [1] } }, false],
+        ['empty disabledOptions stays conservatively excluded', {}, false],
+        ['empty show with current hide stays enabled', { show: {}, hide: { '@version': [2] } }, true],
+        ['empty maps stay conservatively excluded', { show: {}, hide: {} }, false],
+        ['old show with empty hide stays enabled', { show: { '@version': [1] }, hide: {} }, true],
+        ['parameter-dependent disabled state stays excluded', { show: { resource: ['input'] } }, false],
+        ['malformed disabledOptions stays conservatively excluded', { show: 'invalid' }, false],
+    ])('handles %s', (_label, disabledOptions, expected) => {
+        const doc = TypeScriptFormatter.generateCompactNodeDoc({
+            name: 'versioned',
+            type: 'n8n-nodes-base.versioned',
+            displayName: 'Versioned',
+            description: 'Versioned node',
+            version: [1, 2],
+            properties: [{
+                name: 'choice',
+                type: 'options',
+                disabledOptions,
+                options: [{ value: 'enabled' }],
+            }],
+        } as any);
+        const hasProjection = doc.includes('// choice:') && /\n  choice:\s/.test(doc);
+        expect(hasProjection).toBe(expected);
+    });
 });
 
 /**
